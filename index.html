@@ -1,0 +1,148 @@
+<html>
+  <head>
+
+    <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+    <script src="https://maps.googleapis.com/maps/api/js"></script>
+
+    <script>
+      $(document).ready(function(){
+
+        // The map object
+        var map;
+
+        // The master list of data
+        var master_list = Array();
+
+        // Create the map
+        function createMap() {
+          // Get the canvas element
+          var mapCanvas = document.getElementById('map-canvas');
+
+          // Set up the map options
+          var mapOptions = {
+            center: new google.maps.LatLng(53.78, -3.85),
+            zoom: 6,
+            streetViewControl: false,
+            mapTypeControl: false,
+            mapTypeId: google.maps.MapTypeId.ROADMAP
+          }
+
+          // Create the map
+          map = new google.maps.Map(mapCanvas, mapOptions)
+
+          // Add a polygon for each local authority that has signed the Declaration
+          for (i = 0; i < master_list.length; i++) {
+
+            if (master_list[i].declared === "Yes") {
+
+var triangleCoords = [
+  {lat: 25.774, lng: -80.190},
+  {lat: 18.466, lng: -66.118},
+  {lat: 32.321, lng: -64.757},
+  {lat: 25.774, lng: -80.190}
+];
+
+//console.log(triangleCoords);
+//console.log(master_list[i].geometry);
+
+              poly = new google.maps.Polygon({
+//                paths: master_list[i].geometry,
+ paths: triangleCoords,
+                fillColor: "#7ddba4",
+                fillOpacity: 0.01,
+                strokeWeight: 0.05
+              });
+              poly.setMap(map);
+
+              // Add mouse-over tooltip for LA Declaration details
+              var when = new Date(master_list[i].when);
+              label_content = "Made by: " + master_list[i].who + "<p>On: " + when.toDateString();
+
+              var marker = new google.maps.Marker({
+                position: new google.maps.LatLng(0,0),
+                draggable: false,
+                raiseOnDrag: false,
+                map: map,
+                labelContent: label_content,
+                labelStyle: {opacity: 1.0},
+                icon: "http://placehold.it/1x1",
+                visible: false
+              });
+
+              google.maps.event.addListener(poly, "mousemove", function(event) {
+                marker.setPosition(event.latLng);
+                marker.setVisible(true);
+              });
+
+              google.maps.event.addListener(poly, "mouseout", function(event) {
+                marker.setVisible(false);
+              });
+
+            }
+
+          }
+
+        }
+
+        // Get the google XLS data as CSV, put it all in a array of objects
+        $.get('backend.py',function( data ) {
+          line_list = data.split("\n");
+          for (i = 0; i < line_list.length - 1; i++) {
+            line_parts = line_list[i].split(",");
+            boundary_object = {
+              area: line_parts[0],
+              declared: line_parts[1],
+              who: line_parts[2],
+              when: line_parts[3]
+            };
+            master_list.push(boundary_object);
+          }
+
+          // Now get the big blob of geojson and add to the master list
+          $.getJSON( "la_boundaries.geojson", function( data ) {
+            num_areas = data["features"].length
+            for (i = 0; i < num_areas; i++) { 
+              area = data["features"][i]["properties"]["lad17nm"];
+              for (j = 0; j < master_list.length; j++) {
+                if (master_list[j].area == area) {
+                  // Convert coordinates and store
+                  geo_list = Array();
+                  for (k = 0; k < data["features"][i]["geometry"]["coordinates"][0].length; k++) {
+                    latlong_pair = {
+                      lat: data["features"][i]["geometry"]["coordinates"][0][k][1],
+                      lng:data["features"][i]["geometry"]["coordinates"][0][k][0]
+                    }
+                    geo_list.push(latlong_pair);
+                  }
+                  master_list[j].geometry = geo_list;
+                  break;
+                }
+              }
+            }
+
+            createMap();
+
+          });
+
+        });
+
+      });
+    </script>
+  </head>
+  <body>
+    <center>
+      <h1>Local Gov Digital Declaration Mao</h1>
+      <h3>Data stored <a href="https://goo.gl/BxcSFo">in this google sheet</a>.</h3>
+      <p>
+      <style>
+       /* Set the size of the div element that contains the map */
+        #map-canvas {
+          height: 80%;  /* The height is 400 pixels */
+          width: 40%;  /* The width is the width of the web page */
+        }
+      </style>
+      <div id="map-canvas"></div>
+
+    </center>
+  </body>
+</html>
