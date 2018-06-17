@@ -3,6 +3,21 @@
 
     <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
     <script src="https://maps.googleapis.com/maps/api/js"></script>
+    <script src="https://cdn.sobekrepository.org/includes/gmaps-markerwithlabel/1.9.1/gmaps-markerwithlabel-1.9.1.min.js"></script>
+
+    <style>
+      .map_tooltip {
+        color: red;
+        background-color: white;
+        font-family: "Lucida Grande", "Arial", sans-serif;
+        font-size: 10px;
+        font-weight: bold;
+        text-align: center;
+        width: 65px;     
+        border: 2px solid black;
+        white-space: nowrap;
+      }
+    </style>
 
     <script>
       $(document).ready(function(){
@@ -33,37 +48,27 @@
           // Add a polygon for each local authority that has signed the Declaration
           for (i = 0; i < master_list.length; i++) {
 
-            if (master_list[i].declared === "Yes") {
-
-var triangleCoords = [
-  {lat: 25.774, lng: -80.190},
-  {lat: 18.466, lng: -66.118},
-  {lat: 32.321, lng: -64.757},
-  {lat: 25.774, lng: -80.190}
-];
-
-//console.log(triangleCoords);
-//console.log(master_list[i].geometry);
-
+            if ((master_list[i].declared === "Yes") && (master_list[i].geometry != null)) {
               poly = new google.maps.Polygon({
-//                paths: master_list[i].geometry,
- paths: triangleCoords,
-                fillColor: "#7ddba4",
-                fillOpacity: 0.01,
+                paths: master_list[i].geometry,
+                fillColor: "#0000ff",
+                fillOpacity: 0.25,
                 strokeWeight: 0.05
               });
               poly.setMap(map);
 
               // Add mouse-over tooltip for LA Declaration details
               var when = new Date(master_list[i].when);
-              label_content = "Made by: " + master_list[i].who + "<p>On: " + when.toDateString();
-
-              var marker = new google.maps.Marker({
+label_content = "<img src='" + master_list[i].logoURL + "' height='60px'><p>Made by: " + master_list[i].who + "<br>On: " + when.toDateString();
+//              label_content = "Made by: " + master_list[i].who + "<br>On: " + when.toDateString();
+              var marker = new MarkerWithLabel({
                 position: new google.maps.LatLng(0,0),
+                labelAnchor: new google.maps.Point(30, 20),
                 draggable: false,
                 raiseOnDrag: false,
                 map: map,
                 labelContent: label_content,
+                labelClass: "map_tooltip", // the CSS class for the label - in this doc - needed?
                 labelStyle: {opacity: 1.0},
                 icon: "http://placehold.it/1x1",
                 visible: false
@@ -86,17 +91,28 @@ var triangleCoords = [
 
         // Get the google XLS data as CSV, put it all in a array of objects
         $.get('backend.py',function( data ) {
+          var declared_count = 0;
           line_list = data.split("\n");
-          for (i = 0; i < line_list.length - 1; i++) {
+          var total_num_las = line_list.length;
+          for (i = 1; i < total_num_las; i++) {
             line_parts = line_list[i].split(",");
-            boundary_object = {
+            if (line_parts[1] === "Yes") {
+              declared_count++;
+            }
+            var la_object = {
               area: line_parts[0],
               declared: line_parts[1],
               who: line_parts[2],
-              when: line_parts[3]
+              when: line_parts[3],
+              logoURL: line_parts[4],
+              geometry: null
             };
-            master_list.push(boundary_object);
+            master_list.push(la_object);
           }
+
+          // Update stats counts
+          $("#declared_count").html(declared_count);
+          $("#percentage").html(Math.round((declared_count / total_num_las)*100));
 
           // Now get the big blob of geojson and add to the master list
           $.getJSON( "la_boundaries.geojson", function( data ) {
@@ -107,15 +123,21 @@ var triangleCoords = [
                 if (master_list[j].area == area) {
                   // Convert coordinates and store
                   geo_list = Array();
-                  for (k = 0; k < data["features"][i]["geometry"]["coordinates"][0].length; k++) {
-                    latlong_pair = {
-                      lat: data["features"][i]["geometry"]["coordinates"][0][k][1],
-                      lng:data["features"][i]["geometry"]["coordinates"][0][k][0]
+                  type = data["features"][i]["geometry"].type;
+
+// STILL GOT A MULTIPOLYGON ISSUE HERE
+
+                  if (type === "Polygon") {
+                    for (k = 0; k < data["features"][i]["geometry"]["coordinates"][0].length; k++) {
+                      latlong_pair = {
+                        lat: data["features"][i]["geometry"]["coordinates"][0][k][1],
+                        lng: data["features"][i]["geometry"]["coordinates"][0][k][0]
+                      }
+                      geo_list.push(latlong_pair);
                     }
-                    geo_list.push(latlong_pair);
+                    master_list[j].geometry = geo_list;
                   }
-                  master_list[j].geometry = geo_list;
-                  break;
+                break;
                 }
               }
             }
@@ -133,12 +155,14 @@ var triangleCoords = [
     <center>
       <h1>Local Gov Digital Declaration Mao</h1>
       <h3>Data stored <a href="https://goo.gl/BxcSFo">in this google sheet</a>.</h3>
+      <h3>So far <span id="declared_count"></span> local authories have signed the Declaration which is <span id="percentage"></span>%</h3>
+<h3 style="color: red; font-weight: bold">To do: Move mouse-over pic and text to side of map (bootstrap), support for MultiPolygon and cloud hosting</h3>
       <p>
       <style>
        /* Set the size of the div element that contains the map */
         #map-canvas {
           height: 80%;  /* The height is 400 pixels */
-          width: 40%;  /* The width is the width of the web page */
+          width: 50%;  /* The width is the width of the web page */
         }
       </style>
       <div id="map-canvas"></div>
