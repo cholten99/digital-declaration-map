@@ -7,14 +7,12 @@
 
     <style>
       .map_tooltip {
-        color: red;
         background-color: white;
         font-family: "Lucida Grande", "Arial", sans-serif;
-        font-size: 10px;
+        font-size: 14px;
         font-weight: bold;
         text-align: center;
-        width: 65px;     
-        border: 2px solid black;
+        border: 1px solid black;
         white-space: nowrap;
       }
     </style>
@@ -49,6 +47,24 @@
           for (i = 0; i < master_list.length; i++) {
 
             if ((master_list[i].declared === "Yes") && (master_list[i].geometry != null)) {
+
+              // Add mouse-over tooltip for LA Declaration details
+
+              var marker = new MarkerWithLabel({
+                position: new google.maps.LatLng(0,0),
+                labelAnchor: new google.maps.Point(30, 20),
+                draggable: false,
+                raiseOnDrag: false,
+                map: map,
+                labelWho: master_list[i].who,
+                labelWhen: master_list[i].when,
+                labelLogo: master_list[i].logoURL,
+                labelClass: "map_tooltip", // the CSS class for the label - in this doc - needed?
+                labelStyle: {opacity: 1.0},
+                icon: "http://placehold.it/1x1",
+                visible: false
+              });
+
               poly = new google.maps.Polygon({
                 paths: master_list[i].geometry,
                 fillColor: "#0000ff",
@@ -57,24 +73,36 @@
               });
               poly.setMap(map);
 
-              // Add mouse-over tooltip for LA Declaration details
-              var when = new Date(master_list[i].when);
-label_content = "<img src='" + master_list[i].logoURL + "' height='60px'><p>Made by: " + master_list[i].who + "<br>On: " + when.toDateString();
-//              label_content = "Made by: " + master_list[i].who + "<br>On: " + when.toDateString();
-              var marker = new MarkerWithLabel({
-                position: new google.maps.LatLng(0,0),
-                labelAnchor: new google.maps.Point(30, 20),
-                draggable: false,
-                raiseOnDrag: false,
-                map: map,
-                labelContent: label_content,
-                labelClass: "map_tooltip", // the CSS class for the label - in this doc - needed?
-                labelStyle: {opacity: 1.0},
-                icon: "http://placehold.it/1x1",
-                visible: false
-              });
+              // Add the new marker to the poly object instance so we can find it later in the event listener callback
+              poly.marker = marker;
 
               google.maps.event.addListener(poly, "mousemove", function(event) {
+
+                // Get the marker data back from the "poly" object context we are in
+                marker = this.marker;
+
+                var who_text = "Signed by: " + marker.labelWho;
+                $("#hidden_who").html(who_text);
+                width_who = $("#hidden_who").width();
+
+                var when_object = new Date(marker.labelWhen);
+                var when = when_object.toDateString();
+                var when_text = "On: " + when;
+                $("#hidden_when").html(when_text);
+                width_when = $("#hidden_when").width();
+
+                var width;
+                if (width_who > width_when) {
+                  width = width_who;
+                } else {
+                  width = width_when;
+                }
+
+                label_content = "<img src='" + marker.labelLogo;
+                label_content = label_content + "' width='" + (width / 2) + "px'><p>" + who_text;
+                label_content = label_content + "<br>On: " + when;
+                marker.labelContent = label_content;
+
                 marker.setPosition(event.latLng);
                 marker.setVisible(true);
               });
@@ -93,18 +121,24 @@ label_content = "<img src='" + master_list[i].logoURL + "' height='60px'><p>Made
         $.get('backend.py',function( data ) {
           var declared_count = 0;
           line_list = data.split("\n");
-          var total_num_las = line_list.length;
+          var total_num_las = line_list.length - 1;
           for (i = 1; i < total_num_las; i++) {
             line_parts = line_list[i].split(",");
-            if (line_parts[1] === "Yes") {
+            // Handle a commma in teh area name
+            if (line_parts.length == 6) {
+              line_parts[0] = line_parts[0] + line_parts[1];
+              line_parts.splice(1, 1);
+            }
+            // For the stats line
+            if (line_parts[2] === "Yes") {
               declared_count++;
             }
             var la_object = {
               area: line_parts[0],
-              declared: line_parts[1],
-              who: line_parts[2],
-              when: line_parts[3],
-              logoURL: line_parts[4],
+              logoURL: line_parts[1],
+              declared: line_parts[2],
+              who: line_parts[3],
+              when: line_parts[4],
               geometry: null
             };
             master_list.push(la_object);
@@ -156,7 +190,7 @@ label_content = "<img src='" + master_list[i].logoURL + "' height='60px'><p>Made
       <h1>Local Gov Digital Declaration Mao</h1>
       <h3>Data stored <a href="https://goo.gl/BxcSFo">in this google sheet</a>.</h3>
       <h3>So far <span id="declared_count"></span> local authories have signed the Declaration which is <span id="percentage"></span>%</h3>
-<h3 style="color: red; font-weight: bold">To do: Move mouse-over pic and text to side of map (bootstrap), support for MultiPolygon and cloud hosting</h3>
+<h3 style="color: red; font-weight: bold">To do: Support for MultiPolygon and cloud hosting</h3>
       <p>
       <style>
        /* Set the size of the div element that contains the map */
@@ -166,6 +200,10 @@ label_content = "<img src='" + master_list[i].logoURL + "' height='60px'><p>Made
         }
       </style>
       <div id="map-canvas"></div>
+
+      <!-- Hidden divs used to find with of text in the map tooltips -->
+      <span id="hidden_who" style="visibility: hidden;"></span>
+      <span id="hidden_when" style="visibility: hidden;"></span>
 
     </center>
   </body>
